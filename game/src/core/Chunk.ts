@@ -1,6 +1,5 @@
-import {Vector2} from "../support/Vector2";
+import {indexToPos, neighbors, posToIndex, Vector2} from "../support";
 import {Tile, TileContent} from "./Tile";
-import {indexToPos, neighbors, posToIndex} from "../support/2dFieldOperations";
 
 export class Chunk {
     constructor(private size: Vector2, private contents: Tile[]) {
@@ -26,6 +25,14 @@ export class Chunk {
                 neighbors(this.contents, indexToPos(index, this.size), this.size)
             )
         );
+    }
+
+    public getActualTiles(): Tile[] {
+        return this.contents;
+    }
+
+    public getTile(position: Vector2): Tile {
+        return this.contents[posToIndex(position, this.size)];
     }
 
     public open(position: Vector2): TileContent {

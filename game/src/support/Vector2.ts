@@ -34,7 +34,39 @@ export class Vector2 {
         }
     }
 
-    public add(vec2: Vector2) {
+    public add(vec2: Vector2): Vector2 {
         return new Vector2(this.x + vec2.x, this.y + vec2.y);
+    }
+
+    public subtract(vec: Vector2): Vector2 {
+        return new Vector2(this.x - vec.x, this.y - vec.y);
+    }
+
+    public area(): number {
+        return this.x * this.y;
+    }
+
+    public asMapKey(): Symbol {
+        return Symbol.for(`(${this.x}|${this.y})`);
+    }
+
+    public equals(vec: Vector2): boolean {
+        return this.x === vec.x && this.y === vec.y;
+    }
+
+    public scalarMultiplicate(scalar: number): Vector2 {
+        return new Vector2(this.x * scalar, this.y * scalar);
+    }
+
+    public scalarDivide(scalar: number): Vector2 {
+        return new Vector2(this.x / scalar, this.y / scalar);
+    }
+
+    public elementDivide(vec: Vector2): Vector2 {
+        return new Vector2(this.x / vec.x, this.y / vec.y);
+    }
+
+    public floor(): Vector2 {
+        return new Vector2(Math.floor(this.x), Math.floor(this.y));
     }
 }

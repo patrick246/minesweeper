@@ -1,4 +1,4 @@
-import {Vector2} from "../support/Vector2";
+import {Vector2} from "../support";
 
 export type TileContent = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 'closed' | 'mine' | 'flag';
 
@@ -20,6 +20,10 @@ export class Tile {
         return this.opened;
     }
 
+    public isFlagged(): boolean {
+        return this.flagged;
+    }
+
     public calculateNumber(neighbors: Tile[]): TileContent {
         if(this.flagged) {
             return 'flag';
@@ -39,12 +43,18 @@ export class Tile {
         return num as TileContent;
     }
 
-    public open() {
+    public open(): void {
+        if(this.flagged) {
+            return;
+        }
         this.opened = true;
     }
 
-    public flag() {
-        this.flagged = true;
+    public flag(): void {
+        if(this.opened) {
+            return;
+        }
+        this.flagged = !this.flagged;
     }
 
     public getPosition(): Vector2 {

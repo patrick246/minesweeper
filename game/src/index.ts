@@ -1,5 +1,14 @@
-import {CmdPlayer} from "./input/CmdPlayer";
-import {Game} from "./core/Game";
+/*(async () => {
+    const gameServer = new GameServer(new CoreGame(), 3000);
+    const gPromise = gameServer.run();
 
-const player = new CmdPlayer(new Game());
-player.run().then(() => console.log('Finished')).catch(err => console.error(err));
+
+    const client = new GameClient("ws://localhost:3000");
+    await client.waitForConnection();
+    const player = new CmdPlayer(client);
+    Promise.all([gPromise, player.run()]);
+});*/
+
+export * from './core';
+export * from './support';
+export * from './remote/Messages';

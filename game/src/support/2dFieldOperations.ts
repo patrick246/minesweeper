@@ -1,4 +1,5 @@
 import {Vector2} from "./Vector2";
+import {ChunkedPosition} from "../core";
 
 export function neighbors<T>(array: T[], position: Vector2, size: Vector2): T[] {
     return neighborIndices(position, size)
@@ -18,6 +19,15 @@ export function neighborPositions(position: Vector2, size: Vector2): Vector2[] {
     ]
         .map(relative => position.add(relative))
         .filter(entry => onlyInBounds(entry, size));
+}
+
+export function neighborPositionsChunked(chunkedPosition: ChunkedPosition): ChunkedPosition[] {
+    return [
+        new Vector2(-1, -1),    new Vector2(0, -1),     new Vector2(1, -1),
+        new Vector2(-1, 0),                                   new Vector2(1, 0),
+        new Vector2(-1, 1),     new Vector2(0, 1),      new Vector2(1, 1)
+    ]
+        .map(relative => chunkedPosition.add(relative));
 }
 
 export function posToIndex(position: Vector2, size: Vector2): number {

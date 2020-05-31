@@ -1,0 +1,12 @@
+version: '3'
+services:
+  client:
+    image: repo.p246.dev/patrick246/minesweeper-client:1.0.0
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+  server:
+    image: repo.p246.dev/patrick246/minesweeper-server:1.0.0
+    build:
+      context: .
+      dockerfile: server/Dockerfile
