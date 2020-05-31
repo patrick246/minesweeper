@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: client/Dockerfile
   server:
-    image: repo.p246.dev/patrick246/minesweeper-server:1.0.0
+    image: repo.p246.dev/patrick246/minesweeper-server:1.0.1
     build:
       context: .
       dockerfile: server/Dockerfile

@@ -152,7 +152,7 @@ export class World {
         if(this.loadedChunks.has(chunkPos.asMapKey())) {
             throw new Error("Tried to generate chunk that already exists");
         }
-        const chunk = Chunk.generate(this.chunkSize, 0.12);
+        const chunk = Chunk.generate(this.chunkSize, 0.16);
         this.loadedChunks.set(chunkPos.asMapKey(), chunk);
         return chunk;
     }
