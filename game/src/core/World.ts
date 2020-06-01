@@ -104,7 +104,7 @@ export class World {
             const affectedChunks: Map<Symbol, Vector2> = new Map<Symbol, Vector2>();
             for(let pos of neighborPositions) {
                 const neighborTile = this.getChunk(pos.getChunk()).getTile(pos.getPosition());
-                if(neighborTile.isOpen()) {
+                if(neighborTile.isOpen() || neighborTile.isFlagged()) {
                     continue;
                 }
                 neighborTile.open();
