@@ -31,6 +31,7 @@ export class WorldDisplay {
         if(force || Math.abs(this.offsetSinceLastRecalculation.x) > (chunkSize.x / 2) * this.tileSize ||
             Math.abs(this.offsetSinceLastRecalculation.y) > (chunkSize.y / 2) * this.tileSize
         ) {
+            history.replaceState({location: this.location}, '', `#${this.location.x},${this.location.y}`);
             this.offsetSinceLastRecalculation = new Vector2(0, 0);
             const visibleChunks = await this.chunkLoader.getChunksInViewport(this.location, new Vector2(window.innerWidth, window.innerHeight));
             for(let chunk of visibleChunks) {

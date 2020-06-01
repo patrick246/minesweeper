@@ -37,7 +37,16 @@ export class GameApplication {
         this.app.stage.addChild(this.world.getContainer());
         this.mouseListener.on('drag', offset => setImmediate(() => this.world!.onPlayerLocationUpdate(offset)));
         this.mouseListener.on('click', (position, buttons) => this.world!.onPlayerClick(position, buttons));
-        await this.world.onPlayerLocationUpdate(new Vector2(0, 0), true);
+
+        let startPosition = location.hash.substr(1).split(",");
+        console.log(startPosition);
+        if(startPosition.length !== 2) {
+            startPosition = ['0', '0'];
+        }
+        await this.world.onPlayerLocationUpdate(
+            Vector2.fromArray(startPosition.map(elem => parseInt(elem) || 0) as [number, number]),
+            true
+        );
     }
 
     private loadResources(): Promise<void> {
