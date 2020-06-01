@@ -7,5 +7,7 @@ if(gamePortStr) {
     gamePort = parseInt(gamePortStr) || gamePort;
 }
 
-const gameServer = new GameServer(new CoreGame(), gamePort);
+let difficulty = parseFloat(process.env.GAME_DIFFICULTY || '0.155') || 0.155;
+
+const gameServer = new GameServer(new CoreGame(difficulty), gamePort);
 gameServer.run().catch(err => console.error(err));

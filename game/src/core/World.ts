@@ -1,8 +1,7 @@
-import {Vector2} from "../support";
+import {indexToPos, neighborPositionsChunked, Vector2} from "../support";
 import {Chunk} from "./Chunk";
 import {Tile, TileContent} from "./Tile";
 import {ChunkedPosition} from "./ChunkedPosition";
-import {indexToPos, neighborPositionsChunked} from "../support";
 import {ChunkUpdate} from "./ChunkUpdate";
 import {ChunkListener} from "./ChunkListenerService";
 
@@ -11,7 +10,7 @@ export class World {
     private loadedChunks: Map<Symbol, Chunk> = new Map<Symbol, Chunk>();
     private readonly updateListener: (chunkUpdate: ChunkUpdate) => void;
 
-    constructor(private chunkSize: Vector2, listener: ChunkListener) {
+    constructor(private chunkSize: Vector2, listener: ChunkListener, private difficulty: number) {
         this.updateListener = listener;
         if(this.loadedChunks.size === 0) {
             this.generateChunk(new Vector2(0, 0));
@@ -152,7 +151,7 @@ export class World {
         if(this.loadedChunks.has(chunkPos.asMapKey())) {
             throw new Error("Tried to generate chunk that already exists");
         }
-        const chunk = Chunk.generate(this.chunkSize, 0.16);
+        const chunk = Chunk.generate(this.chunkSize, this.difficulty);
         this.loadedChunks.set(chunkPos.asMapKey(), chunk);
         return chunk;
     }
@@ -169,9 +168,8 @@ export class World {
 
     private getNeighbors(chunkedPosition: ChunkedPosition): Tile[] {
         const neighborPositions = neighborPositionsChunked(chunkedPosition);
-        const n = neighborPositions
+        return neighborPositions
             .map(pos => this.getChunk(pos.getChunk()).getTile(pos.getPosition()));
-        return n;
     }
 
     private getSingleTileContent(tile: Tile, chunkedPosition: ChunkedPosition): TileContent {

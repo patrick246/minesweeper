@@ -12,8 +12,8 @@ export class CoreGame implements Game {
     private readonly updateListeners: Map<Symbol, ChunkListener[]> = new Map<Symbol, ChunkListener[]>();
     private readonly chunkSize: Vector2 = new Vector2(64, 32);
 
-    constructor() {
-        this.world = new World(this.chunkSize, (update) => this.onChunkUpdate(update));
+    constructor(difficulty: number) {
+        this.world = new World(this.chunkSize, (update) => this.onChunkUpdate(update), difficulty);
     }
 
     public async on(_: 'update', chunk: Vector2, callback: (update: ChunkUpdate) => void): Promise<string> {
