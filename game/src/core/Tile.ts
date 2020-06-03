@@ -54,7 +54,7 @@ export class Tile {
         if(this.opened) {
             return;
         }
-        this.flagged = !this.flagged;
+        this.flagged = true;
     }
 
     public getPosition(): Vector2 {
