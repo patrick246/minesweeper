@@ -1,17 +1,20 @@
-import {ChunkedPosition, ChunkUpdate, Game, TileContent} from "../core";
-import {Vector2} from "../support";
-import {MessageEvent} from "isomorphic-ws";
+import {ChunkedPosition, ChunkUpdate, Game, TileContent, Vector2} from "game";
 import * as WebSocket from "isomorphic-ws";
+import {MessageEvent} from "isomorphic-ws";
 import {
-    ChunkSizeRequest, ChunkSizeResponse,
+    ChunkSizeRequest,
+    ChunkSizeResponse,
     FlagRequest,
     GetChunkRequest,
     GetChunkResponse,
-    Message, OpenRequest,
-    RegisterChunkListenerRequest, RegisterChunkListenerResponse, RemoveChunkListenerRequest
-} from "..";
+    Message,
+    OpenRequest,
+    RegisterChunkListenerRequest,
+    RegisterChunkListenerResponse,
+    RemoveChunkListenerRequest
+} from ".";
 import {EventEmitter} from "events";
-import {ChunkListener} from "../core/ChunkListenerService";
+import {ChunkListener} from "game";
 
 export class GameClient implements Game {
     private socket: WebSocket;

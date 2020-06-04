@@ -14,6 +14,7 @@
   "author": "patrick246",
   "license": "AGPL-3.0-or-later",
   "devDependencies": {
+    "@types/pixi.js": "^5.0.0",
     "clean-webpack-plugin": "^3.0.0",
     "copy-webpack-plugin": "^6.0.1",
     "css-loader": "^3.5.3",
@@ -26,8 +27,8 @@
     "webpack-dev-server": "^3.11.0"
   },
   "dependencies": {
-    "@types/pixi.js": "^5.0.0",
     "game": "file:../game",
+    "communication": "file:../communication",
     "pixi.js": "^5.2.4"
   }
 }

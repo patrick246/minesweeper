@@ -5,6 +5,7 @@ import {Game} from "./Game.interface";
 import {ChunkedPosition} from "./ChunkedPosition";
 import {World} from "./World";
 import {ChunkListener, ChunkListenerService} from "./ChunkListenerService";
+import {ChunkPersistence} from "../persistence";
 
 export class CoreGame implements Game {
     private readonly world: World;
@@ -12,8 +13,13 @@ export class CoreGame implements Game {
     private readonly updateListeners: Map<Symbol, ChunkListener[]> = new Map<Symbol, ChunkListener[]>();
     private readonly chunkSize: Vector2 = new Vector2(64, 32);
 
-    constructor(difficulty: number) {
-        this.world = new World(this.chunkSize, (update) => this.onChunkUpdate(update), difficulty);
+    constructor(difficulty: number, chunkPersistence: ChunkPersistence) {
+        this.world = new World(
+            this.chunkSize,
+            (update) => this.onChunkUpdate(update),
+            difficulty,
+            chunkPersistence
+        );
     }
 
     public async on(_: 'update', chunk: Vector2, callback: (update: ChunkUpdate) => void): Promise<string> {
@@ -25,7 +31,7 @@ export class CoreGame implements Game {
     }
 
     public async getTileContents(chunk: Vector2): Promise<TileContent[]> {
-        return this.world.getChunkTiles(chunk);
+        return await this.world.getChunkTiles(chunk);
     }
 
     public async getChunkSize(): Promise<Vector2> {
@@ -34,11 +40,11 @@ export class CoreGame implements Game {
 
     public async openTile(position: ChunkedPosition): Promise<void> {
         console.log('opening tile', position);
-        this.world.openTile(position);
+        await this.world.openTile(position);
     }
 
     public async flag(position: ChunkedPosition): Promise<void> {
-        this.world.flag(position);
+        await this.world.flag(position);
     }
 
     private onChunkUpdate(update: ChunkUpdate) {

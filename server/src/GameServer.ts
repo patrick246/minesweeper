@@ -1,10 +1,7 @@
 import {
-    ChunkedPosition,
     ChunkSizeResponse,
-    ChunkUpdate,
     ChunkUpdateMessage,
     FlagRequest,
-    Game,
     GetChunkRequest,
     GetChunkResponse,
     Message,
@@ -12,6 +9,11 @@ import {
     RegisterChunkListenerRequest,
     RegisterChunkListenerResponse,
     RemoveChunkListenerRequest,
+} from "communication";
+import {
+    ChunkedPosition,
+    ChunkUpdate,
+    Game,
     Vector2
 } from "game";
 import WebSocket, {MessageEvent, Server} from 'ws';
@@ -37,6 +39,7 @@ export class GameServer {
                 }));
             }
         });
+        console.log('[GameServer] Server started');
     }
 
     private async handleMessage(message: MessageEvent, socket: WebSocket, listeners: Set<string>): Promise<void> {

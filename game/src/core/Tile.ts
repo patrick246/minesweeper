@@ -3,12 +3,11 @@ import {Vector2} from "../support";
 export type TileContent = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 'closed' | 'mine' | 'flag';
 
 export class Tile {
-    private flagged: boolean = false;
-
     constructor(
         private readonly position: Vector2,
         private readonly mine: boolean,
-        private opened: boolean
+        private opened: boolean,
+        private flagged: boolean = false
     ) {
     }
 

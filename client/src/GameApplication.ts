@@ -1,5 +1,5 @@
 import * as PIXI from 'pixi.js';
-import {GameClient} from "game/dist/input/GameClient";
+import {GameClient} from "communication";
 import {WorldDisplay} from "./display/WorldDisplay";
 import {MouseDragListener} from "./display/MouseDragListener";
 import {Vector2} from "game";

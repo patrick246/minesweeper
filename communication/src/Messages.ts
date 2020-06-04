@@ -1,5 +1,5 @@
-import {Vector2} from "../support";
-import {ChunkedPosition, TileContent} from "../core";
+import {Vector2} from "game";
+import {ChunkedPosition, TileContent} from "game";
 
 export type Message =
     GetChunkRequest |

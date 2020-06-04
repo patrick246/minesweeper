@@ -11,4 +11,5 @@
 
 export * from './core';
 export * from './support';
-export * from './remote/Messages';
+export {ChunkListener} from './core/ChunkListenerService';
+export * from './persistence';

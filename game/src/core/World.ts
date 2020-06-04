@@ -4,71 +4,71 @@ import {Tile, TileContent} from "./Tile";
 import {ChunkedPosition} from "./ChunkedPosition";
 import {ChunkUpdate} from "./ChunkUpdate";
 import {ChunkListener} from "./ChunkListenerService";
+import {filterAsync} from "../support/arrayAsyncHelper";
+import {ChunkPersistence, PersistedChunk} from "../persistence";
 
 
 export class World {
     private loadedChunks: Map<Symbol, Chunk> = new Map<Symbol, Chunk>();
-    private readonly updateListener: (chunkUpdate: ChunkUpdate) => void;
+    private inflightChunkRequests: Map<Symbol, Promise<PersistedChunk | null>> = new Map<Symbol, Promise<PersistedChunk | null>>();
+    private dirtyChunks: Map<Symbol, Vector2> = new Map<Symbol, Vector2>();
 
-    constructor(private chunkSize: Vector2, listener: ChunkListener, private difficulty: number) {
-        this.updateListener = listener;
-        if(this.loadedChunks.size === 0) {
-            this.generateChunk(new Vector2(0, 0));
-        }
+    constructor(
+        private chunkSize: Vector2,
+        private updateListener: ChunkListener,
+        private difficulty: number,
+        private chunkPersistence: ChunkPersistence
+    ) {
+        setInterval(() => this.saveWorldJob(), 5000);
     }
 
-    public getChunkTiles(chunkPos: Vector2): TileContent[] {
-        if(!this.loadedChunks.has(chunkPos.asMapKey())) {
+    public async getChunkTiles(chunkPos: Vector2): Promise<TileContent[]> {
+        const chunkOrNull = await this.getChunkOrNull(chunkPos);
+        if(chunkOrNull === null) {
             const content: TileContent[] = new Array<TileContent>(this.chunkSize.area())
             return content.fill('closed');
         }
+        const tiles = chunkOrNull.getActualTiles();
 
-        const chunk = this.loadedChunks.get(chunkPos.asMapKey());
-        if(chunk === undefined) {
-            throw new Error("Chunk is undefined, but present in map: " + chunkPos);
-        }
-
-        const tiles = chunk.getActualTiles();
-
-        return tiles.map((tile, index) => {
+        return Promise.all(tiles.map((tile, index) => {
             const chunkedPosition = new ChunkedPosition(chunkPos, indexToPos(index, this.chunkSize), this.chunkSize)
             return this.getSingleTileContent(tile, chunkedPosition);
-        });
+        }));
     }
 
-    public openTile(chunkedPosition: ChunkedPosition): TileContent {
-        const tile = this.getChunk(chunkedPosition.getChunk()).getTile(chunkedPosition.getPosition());
-        if(tile.isOpen()) {
-            this.tryAutoOpenNeighbor(chunkedPosition);
+    public async openTile(chunkedPosition: ChunkedPosition): Promise<TileContent> {
+        const tile = await this.getSingleChunkTile(chunkedPosition);
+        if (tile.isOpen()) {
+            await this.tryAutoOpenNeighbor(chunkedPosition);
         } else {
             tile.open();
-            this.updateListener(new ChunkUpdate(chunkedPosition.getChunk(), this.getChunkTiles(chunkedPosition.getChunk()), this.chunkSize));
         }
-        const content = this.getSingleTileContent(tile, chunkedPosition);
-        if(content === 0) {
-            this.autoOpenZero(chunkedPosition);
+        const content = await this.getSingleTileContent(tile, chunkedPosition);
+        if (content === 0) {
+            await this.autoOpenZero(chunkedPosition);
         }
+        await this.markDirty(chunkedPosition.getChunk());
         return content;
     }
 
-    public flag(chunkedPosition: ChunkedPosition): boolean {
-        const tile = this.getChunk(chunkedPosition.getChunk()).getTile(chunkedPosition.getPosition());
-        if(tile.isOpen()) {
-            this.tryAutoFlagNeighbor(chunkedPosition);
+    public async flag(chunkedPosition: ChunkedPosition): Promise<boolean> {
+        const tile = await this.getSingleChunkTile(chunkedPosition);
+        if (tile.isOpen()) {
+            await this.tryAutoFlagNeighbor(chunkedPosition);
             return tile.isFlagged();
-        } else if(tile.isMine()) {
+        } else if (tile.isMine()) {
             tile.flag();
         } else {
             tile.open();
         }
-        this.updateListener(new ChunkUpdate(chunkedPosition.getChunk(), this.getChunkTiles(chunkedPosition.getChunk()), this.chunkSize));
+        await this.markDirty(chunkedPosition.getChunk());
         return tile.isFlagged();
     }
 
-    private autoOpenZero(chunkedPosition: ChunkedPosition) {
+    private async autoOpenZero(chunkedPosition: ChunkedPosition): Promise<void> {
         const positions = [
             ...neighborPositionsChunked(chunkedPosition)
-                .filter(pos => !this.getChunk(pos.getChunk()).getTile(pos.getPosition()).isOpen())
+                .filter(async (pos) => !(await this.getSingleChunkTile(pos)).isOpen())
         ];
         const plannedChunkUpdates: Map<Symbol, Vector2> = new Map<Symbol, Vector2>();
         while (positions.length !== 0) {
@@ -76,103 +76,134 @@ export class World {
             if (position === undefined) {
                 continue;
             }
-            const tile = this.getChunk(position.getChunk()).getTile(position.getPosition());
+            const tile = await this.getSingleChunkTile(position);
             tile.open()
-            const result = this.getSingleTileContent(tile, position);
+            const result = await this.getSingleTileContent(tile, position);
             if (result === 0) {
                 positions.push(
-                    ...neighborPositionsChunked(position)
-                        .filter(pos => !this.getChunk(pos.getChunk()).getTile(pos.getPosition()).isOpen())
+                    ...await filterAsync(neighborPositionsChunked(position), async (pos) => !(await this.getSingleChunkTile(pos)).isOpen())
                 );
             }
             plannedChunkUpdates.set(position.getChunk().asMapKey(), position.getChunk());
         }
-        for(let [_, chunk] of plannedChunkUpdates.entries()) {
-            this.updateListener(new ChunkUpdate(chunk, this.getChunkTiles(chunk), this.chunkSize));
+        for (let [_, chunk] of plannedChunkUpdates.entries()) {
+            await this.markDirty(chunk);
         }
     }
 
-    private tryAutoOpenNeighbor(position: ChunkedPosition) {
-        const tile = this.getChunk(position.getChunk()).getTile(position.getPosition());
-        const content = this.getSingleTileContent(tile, position);
+    private async tryAutoOpenNeighbor(position: ChunkedPosition): Promise<void> {
+        const tile = await this.getSingleChunkTile(position);
+        const content = await this.getSingleTileContent(tile, position);
         const neighborPositions = neighborPositionsChunked(position);
-        const flagCount = neighborPositions
-            .map(pos => this.getChunk(pos.getChunk()).getTile(pos.getPosition()))
+        const flagCount = (await Promise.all(neighborPositions
+            .map(pos => this.getSingleChunkTile(pos))))
             .reduce((count, t) => count + (t.isFlagged() || (t.isOpen() && t.isMine()) ? 1 : 0), 0);
 
-        if(content === flagCount) {
+        if (content === flagCount) {
             const affectedChunks: Map<Symbol, Vector2> = new Map<Symbol, Vector2>();
-            for(let pos of neighborPositions) {
-                const neighborTile = this.getChunk(pos.getChunk()).getTile(pos.getPosition());
-                if(neighborTile.isOpen() || neighborTile.isFlagged()) {
+            for (let pos of neighborPositions) {
+                const neighborTile = await this.getSingleChunkTile(pos);
+                if (neighborTile.isOpen() || neighborTile.isFlagged()) {
                     continue;
                 }
                 neighborTile.open();
-                const neighborContent = this.getSingleTileContent(tile, pos);
-                if(neighborContent === 0) {
-                    this.autoOpenZero(pos);
+                const neighborContent = await this.getSingleTileContent(tile, pos);
+                if (neighborContent === 0) {
+                    await this.autoOpenZero(pos);
                 }
                 affectedChunks.set(pos.getChunk().asMapKey(), pos.getChunk());
             }
-            for(let [_, chunk] of affectedChunks.entries()) {
-                this.updateListener(new ChunkUpdate(chunk, this.getChunkTiles(chunk), this.chunkSize));
+            for (let [_, chunk] of affectedChunks.entries()) {
+                await this.markDirty(chunk);
             }
         }
     }
 
-    private tryAutoFlagNeighbor(position: ChunkedPosition): void {
-        const tile = this.getChunk(position.getChunk()).getTile(position.getPosition());
-        const content = this.getSingleTileContent(tile, position);
+    private async tryAutoFlagNeighbor(position: ChunkedPosition): Promise<void> {
+        const tile = await this.getSingleChunkTile(position);
+        const content = await this.getSingleTileContent(tile, position);
         const neighborPositions = neighborPositionsChunked(position);
-        const neighborTiles = neighborPositions
-            .map(pos => this.getChunk(pos.getChunk()).getTile(pos.getPosition()));
+        const neighborTiles = await Promise.all(neighborPositions
+            .map(pos => this.getSingleChunkTile(pos)));
         const unopenedOrMineOrFlaggedCount = neighborTiles
             .reduce((count, t) => count + ((!t.isOpen() || t.isMine() || t.isFlagged()) ? 1 : 0), 0);
 
-        if(content === unopenedOrMineOrFlaggedCount) {
+        if (content === unopenedOrMineOrFlaggedCount) {
             const affectedChunks: Map<Symbol, Vector2> = new Map<Symbol, Vector2>();
-            for(let i = 0; i < neighborPositions.length; i++) {
+            for (let i = 0; i < neighborPositions.length; i++) {
                 const neighborTile = neighborTiles[i];
-                if(neighborTile.isOpen() || neighborTile.isFlagged()) {
-                   continue;
+                if (neighborTile.isOpen() || neighborTile.isFlagged()) {
+                    continue;
                 }
                 neighborTile.flag();
                 const chunk = neighborPositions[i].getChunk()
                 affectedChunks.set(chunk.asMapKey(), chunk);
             }
-            for(let [_, chunk] of affectedChunks.entries()) {
-                this.updateListener(new ChunkUpdate(chunk, this.getChunkTiles(chunk), this.chunkSize));
+            for (let [_, chunk] of affectedChunks.entries()) {
+                await this.markDirty(chunk);
             }
         }
     }
 
     private generateChunk(chunkPos: Vector2): Chunk {
         console.log('[World] Generating chunk', chunkPos);
-        if(this.loadedChunks.has(chunkPos.asMapKey())) {
+        if (this.loadedChunks.has(chunkPos.asMapKey())) {
             throw new Error("Tried to generate chunk that already exists");
         }
-        const chunk = Chunk.generate(this.chunkSize, this.difficulty);
+        const chunk = Chunk.generate(chunkPos, this.chunkSize, this.difficulty);
         this.loadedChunks.set(chunkPos.asMapKey(), chunk);
         return chunk;
     }
 
-    private getChunk(chunkPos: Vector2): Chunk {
-        if(this.loadedChunks.has(chunkPos.asMapKey())) {
+    private async getChunk(chunkPos: Vector2): Promise<Chunk> {
+        const chunkOrNull = await this.getChunkOrNull(chunkPos);
+        if(chunkOrNull === null) {
+            return this.generateChunk(chunkPos);
+        }
+        return chunkOrNull;
+    }
+
+    private async getChunkOrNull(chunkPos: Vector2): Promise<Chunk | null> {
+        const chunkKey = chunkPos.asMapKey();
+        if (this.loadedChunks.has(chunkPos.asMapKey())) {
             return this.loadedChunks.get(chunkPos.asMapKey()) as Chunk;
         }
 
-        // ToDo: Implement chunk loading here, if chunk exists but isn't loaded
+        let persistedChunkPromise: Promise<PersistedChunk | null>;
+        if (this.inflightChunkRequests.has(chunkKey)) {
+            console.log('getting chunk that has an inflight request');
+            persistedChunkPromise = this.inflightChunkRequests.get(chunkKey)!;
+        } else {
+            persistedChunkPromise = this.chunkPersistence.loadChunk(chunkPos);
+            this.inflightChunkRequests.set(chunkKey, persistedChunkPromise);
+        }
 
-        return this.generateChunk(chunkPos);
+        const persistedChunk = await persistedChunkPromise;
+
+        this.inflightChunkRequests.delete(chunkKey);
+        if (this.loadedChunks.has(chunkKey)) {
+            return this.loadedChunks.get(chunkKey)!;
+        }
+
+        if (persistedChunk === null) {
+            return null;
+        }
+        const chunk = Chunk.load(chunkPos, this.chunkSize, persistedChunk);
+        this.loadedChunks.set(chunkKey, chunk);
+        return chunk;
     }
 
-    private getNeighbors(chunkedPosition: ChunkedPosition): Tile[] {
+    private async getNeighbors(chunkedPosition: ChunkedPosition): Promise<Tile[]> {
         const neighborPositions = neighborPositionsChunked(chunkedPosition);
-        return neighborPositions
-            .map(pos => this.getChunk(pos.getChunk()).getTile(pos.getPosition()));
+        return await Promise.all(neighborPositions
+            .map(pos => this.getSingleChunkTile(pos)));
     }
 
-    private getSingleTileContent(tile: Tile, chunkedPosition: ChunkedPosition): TileContent {
+    private async getSingleChunkTile(pos: ChunkedPosition) {
+        return (await this.getChunk(pos.getChunk())).getTile(pos.getPosition());
+    }
+
+    private async getSingleTileContent(tile: Tile, chunkedPosition: ChunkedPosition): Promise<TileContent> {
         if (tile.isFlagged()) {
             return 'flag';
         }
@@ -185,8 +216,27 @@ export class World {
             return 'mine';
         }
 
-        const num = this.getNeighbors(chunkedPosition)
+        const num = (await this.getNeighbors(chunkedPosition))
             .reduce((count, t) => count + (t.isMine() ? 1 : 0), 0);
         return num as TileContent;
+    }
+
+    private async markDirty(chunkPos: Vector2): Promise<void> {
+        this.dirtyChunks.set(chunkPos.asMapKey(), chunkPos);
+        this.updateListener(new ChunkUpdate(chunkPos, await this.getChunkTiles(chunkPos), this.chunkSize));
+    }
+
+    private async saveWorldJob(): Promise<void> {
+        if(this.dirtyChunks.size === 0) {
+            return;
+        }
+        console.log('[World] Saving world');
+        await Promise.all([...this.dirtyChunks.values()]
+            .filter(pos => this.loadedChunks.has(pos.asMapKey()))
+            .map(pos => this.loadedChunks.get(pos.asMapKey())!)
+            .map(chunk => this.chunkPersistence.persistChunk(chunk.toPersistent())));
+
+        console.log('[World] World save successful, saved ', this.dirtyChunks.size, 'dirty chunks');
+        this.dirtyChunks.clear();
     }
 }
