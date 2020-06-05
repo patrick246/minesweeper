@@ -17,6 +17,29 @@ import {
     Vector2
 } from "game";
 import WebSocket, {MessageEvent, Server} from 'ws';
+import {Counter, exponentialBuckets, Gauge, Histogram} from "prom-client";
+
+const websocketMessageProcessingHistogram = new Histogram({
+    name: 'ws_request_duration_seconds',
+    help: 'Websocket request processing latency in seconds',
+    labelNames: ['type'],
+    buckets: exponentialBuckets(0.001, 1.5, 20)
+});
+
+const chunkUpdateListenerGauge = new Gauge({
+    name: 'game_chunk_listener_amount',
+    help: 'Number of registered chunk listeners by websocket clients'
+});
+
+const chunkUpdateCounter = new Counter({
+    name: 'game_chunk_update_count',
+    help: 'Number of chunk updates sent out to websocket clients'
+});
+
+const websocketOpenConnectionsGauge = new Gauge({
+    name: 'ws_connection_amount',
+    help: 'Number of open websocket connections'
+});
 
 export class GameServer {
     private server: Server | undefined;
@@ -31,18 +54,23 @@ export class GameServer {
 
         this.server.on("connection", (socket: WebSocket) => {
             console.log('[GameServer] Connection', socket);
+            websocketOpenConnectionsGauge.inc();
             const listenerSet = new Set<string>();
             socket.onmessage = event => this.handleMessage(event, socket, listenerSet);
             socket.onclose = async () => {
                 await Promise.all([...listenerSet].map(async (token) => {
                     await this.game.removeListener(token);
                 }));
+                chunkUpdateListenerGauge.dec(listenerSet.size);
+                websocketOpenConnectionsGauge.dec();
             }
         });
+
         console.log('[GameServer] Server started');
     }
 
     private async handleMessage(message: MessageEvent, socket: WebSocket, listeners: Set<string>): Promise<void> {
+        const requestTimer = websocketMessageProcessingHistogram.startTimer();
         const request = GameServer.readMessage(message);
         console.log(request);
 
@@ -73,6 +101,7 @@ export class GameServer {
         if(response) {
             socket.send(JSON.stringify(response));
         }
+        requestTimer({type: request.type});
     }
 
     private static readMessage(event: MessageEvent): Message {
@@ -150,8 +179,10 @@ export class GameServer {
                     token: token
                 }
             } as ChunkUpdateMessage));
+            chunkUpdateCounter.inc();
         });
         listeners.add(token);
+        chunkUpdateListenerGauge.inc();
         return {
             type: "register_chunk_listener_response",
             chunk: message.chunkPosition,
@@ -166,6 +197,7 @@ export class GameServer {
         }
         await this.game.removeListener(message.token);
         listeners.delete(message.token);
+        chunkUpdateListenerGauge.dec();
     }
 
     private async handleChunkSizeRequest(): Promise<ChunkSizeResponse> {

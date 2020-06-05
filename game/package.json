@@ -18,7 +18,5 @@
     "typescript": "^3.9.3"
   },
   "dependencies": {
-    "isomorphic-ws": "^4.0.1",
-    "ws": "^7.3.0"
   }
 }
