@@ -1,8 +1,8 @@
 import {ChunkPersistence, PersistedChunk} from "./ChunkPersistence";
-import {Vector2} from "../support";
+import {Vector2, Vector2Key} from "../support";
 
 export class InMemoryChunkPersistence implements ChunkPersistence {
-    private chunks: Map<Symbol, PersistedChunk> = new Map<Symbol, PersistedChunk>();
+    private chunks: Map<Vector2Key, PersistedChunk> = new Map<Vector2Key, PersistedChunk>();
 
     public async loadChunk(chunkPos: Vector2): Promise<PersistedChunk | null> {
         return this.chunks.get(chunkPos.asMapKey()) || null;

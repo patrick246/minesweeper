@@ -1,6 +1,9 @@
+export type Vector2Key = string;
+
 export class Vector2 {
     public readonly x: number;
     public readonly y: number;
+    private stringKeyCache: string | undefined;
 
     constructor(x: number, y: number) {
         this.x = x;
@@ -46,8 +49,11 @@ export class Vector2 {
         return this.x * this.y;
     }
 
-    public asMapKey(): Symbol {
-        return Symbol.for(`(${this.x}|${this.y})`);
+    public asMapKey(): Vector2Key {
+        if(this.stringKeyCache) {
+            return this.stringKeyCache;
+        }
+        return this.stringKeyCache =`(${this.x}|${this.y})`;
     }
 
     public equals(vec: Vector2): boolean {

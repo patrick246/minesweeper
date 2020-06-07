@@ -1,12 +1,12 @@
 import {ChunkUpdate} from "./ChunkUpdate";
-import {Vector2} from "../support";
+import {Vector2, Vector2Key} from "../support";
 import {randomBytes} from 'crypto';
 
 export type ChunkListener = (chunkUpdate: ChunkUpdate) => void;
 
 
 export class ChunkListenerService {
-    private readonly registry: Map<Symbol, Map<string, ChunkListener>> = new Map<Symbol, Map<string, ChunkListener>>();
+    private readonly registry: Map<Vector2Key, Map<string, ChunkListener>> = new Map<Vector2Key, Map<string, ChunkListener>>();
     private readonly tokenToChunk: Map<string, Vector2> = new Map<string, Vector2>();
 
     public async registerListener(chunkPos: Vector2, callback: ChunkListener): Promise<string> {

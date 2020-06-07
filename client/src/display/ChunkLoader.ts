@@ -1,12 +1,12 @@
-import {ChunkUpdate, Game, TileContent, Vector2} from "game/dist";
+import {ChunkUpdate, Game, TileContent, Vector2, Vector2Key} from "game/dist";
 import {LocalChunk} from "./LocalChunk";
 
 export class ChunkLoader {
-    private chunks: Map<Symbol, LocalChunk> = new Map<Symbol, LocalChunk>();
-    private chunkTokens: Map<Symbol, string> = new Map<Symbol, string>();
+    private chunks: Map<Vector2Key, LocalChunk> = new Map<Vector2Key, LocalChunk>();
+    private chunkTokens: Map<Vector2Key, string> = new Map<Vector2Key, string>();
     private chunkSize?: Vector2;
     private tileSize: number = 32;
-    private inflightRequests: Map<Symbol, Promise<TileContent[]>> = new Map<Symbol, Promise<TileContent[]>>();
+    private inflightRequests: Map<Vector2Key, Promise<TileContent[]>> = new Map<Vector2Key, Promise<TileContent[]>>();
 
     constructor(private game: Game) {
     }
@@ -72,7 +72,7 @@ export class ChunkLoader {
         return localChunk;
     }
 
-    private async unloadChunk(chunkKey: Symbol): Promise<void> {
+    private async unloadChunk(chunkKey: Vector2Key): Promise<void> {
         if (this.chunks.has(chunkKey)) {
             this.chunks.delete(chunkKey);
         }

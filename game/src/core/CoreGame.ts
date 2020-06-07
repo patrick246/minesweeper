@@ -1,4 +1,4 @@
-import {Vector2} from "../support";
+import {Vector2, Vector2Key} from "../support";
 import {TileContent} from "./Tile";
 import {ChunkUpdate} from "./ChunkUpdate";
 import {Game} from "./Game.interface";
@@ -10,7 +10,7 @@ import {ChunkPersistence} from "../persistence";
 export class CoreGame implements Game {
     private readonly world: World;
     private readonly chunkListenerService: ChunkListenerService = new ChunkListenerService();
-    private readonly updateListeners: Map<Symbol, ChunkListener[]> = new Map<Symbol, ChunkListener[]>();
+    private readonly updateListeners: Map<Vector2Key, ChunkListener[]> = new Map<Vector2Key, ChunkListener[]>();
     private readonly chunkSize: Vector2 = new Vector2(64, 32);
 
     constructor(difficulty: number, chunkPersistence: ChunkPersistence) {

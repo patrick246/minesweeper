@@ -1,4 +1,4 @@
-import {indexToPos, neighborPositionsChunked, Vector2} from "../support";
+import {indexToPos, neighborPositionsChunked, Vector2, Vector2Key} from "../support";
 import {Chunk} from "./Chunk";
 import {Tile, TileContent} from "./Tile";
 import {ChunkedPosition} from "./ChunkedPosition";
@@ -9,9 +9,9 @@ import {ChunkPersistence, PersistedChunk} from "../persistence";
 
 
 export class World {
-    private loadedChunks: Map<Symbol, Chunk> = new Map<Symbol, Chunk>();
-    private inflightChunkRequests: Map<Symbol, Promise<PersistedChunk | null>> = new Map<Symbol, Promise<PersistedChunk | null>>();
-    private dirtyChunks: Map<Symbol, Vector2> = new Map<Symbol, Vector2>();
+    private loadedChunks: Map<Vector2Key, Chunk> = new Map<Vector2Key, Chunk>();
+    private inflightChunkRequests: Map<Vector2Key, Promise<PersistedChunk | null>> = new Map<Vector2Key, Promise<PersistedChunk | null>>();
+    private dirtyChunks: Map<Vector2Key, Vector2> = new Map<Vector2Key, Vector2>();
 
     constructor(
         private chunkSize: Vector2,
@@ -70,7 +70,7 @@ export class World {
             ...neighborPositionsChunked(chunkedPosition)
                 .filter(async (pos) => !(await this.getSingleChunkTile(pos)).isOpen())
         ];
-        const plannedChunkUpdates: Map<Symbol, Vector2> = new Map<Symbol, Vector2>();
+        const plannedChunkUpdates: Map<Vector2Key, Vector2> = new Map<Vector2Key, Vector2>();
         while (positions.length !== 0) {
             const position = positions.pop();
             if (position === undefined) {
@@ -100,7 +100,7 @@ export class World {
             .reduce((count, t) => count + (t.isFlagged() || (t.isOpen() && t.isMine()) ? 1 : 0), 0);
 
         if (content === flagCount) {
-            const affectedChunks: Map<Symbol, Vector2> = new Map<Symbol, Vector2>();
+            const affectedChunks: Map<Vector2Key, Vector2> = new Map<Vector2Key, Vector2>();
             for (let pos of neighborPositions) {
                 const neighborTile = await this.getSingleChunkTile(pos);
                 if (neighborTile.isOpen() || neighborTile.isFlagged()) {
@@ -129,7 +129,7 @@ export class World {
             .reduce((count, t) => count + ((!t.isOpen() || t.isMine() || t.isFlagged()) ? 1 : 0), 0);
 
         if (content === unopenedOrMineOrFlaggedCount) {
-            const affectedChunks: Map<Symbol, Vector2> = new Map<Symbol, Vector2>();
+            const affectedChunks: Map<Vector2Key, Vector2> = new Map<Vector2Key, Vector2>();
             for (let i = 0; i < neighborPositions.length; i++) {
                 const neighborTile = neighborTiles[i];
                 if (neighborTile.isOpen() || neighborTile.isFlagged()) {
