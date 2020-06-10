@@ -11,7 +11,7 @@ export class GameApplication {
     private mouseListener: MouseDragListener;
 
     constructor() {
-        const url = prompt('Game Server URL', "ws://localhost:3000") || 'ws://localhost:3000';
+        const url = this.findUrlValue();
         this.client = new GameClient(url);
         this.app = new PIXI.Application({
             width: window.innerWidth,
@@ -67,6 +67,27 @@ export class GameApplication {
                 "assets/tile_8_32.png",
             ]).load(() => resolve());
         });
+    }
+
+    private findUrlValue(): string {
+        const urlParams = new URLSearchParams(window.location.search);
+        if(urlParams.has('server')) {
+            const queryUrl = urlParams.get('server')!;
+            this.setSavedGameUrl(queryUrl);
+            return queryUrl;
+        }
+        const lastUrl = this.getSavedGameUrl();
+        const url = prompt('Game Server URL', lastUrl || "ws://localhost:3000") || 'ws://localhost:3000';
+        this.setSavedGameUrl(url);
+        return url;
+    }
+
+    private getSavedGameUrl(): string | undefined {
+        return localStorage.getItem('minesweeper_last_game_url') || undefined;
+    }
+
+    private setSavedGameUrl(url: string): void {
+        localStorage.setItem('minesweeper_last_game_url', url);
     }
 
 
