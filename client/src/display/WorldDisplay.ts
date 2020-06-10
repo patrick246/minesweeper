@@ -1,7 +1,7 @@
 import * as PIXI from 'pixi.js';
 import {Game, Vector2} from "game";
 import {ChunkLoader} from "./ChunkLoader";
-import {ChunkedPosition} from "game/dist";
+import {ChunkedPosition, Context} from "game/dist";
 
 export class WorldDisplay {
     private readonly container: PIXI.Container = new PIXI.Container();
@@ -60,9 +60,9 @@ export class WorldDisplay {
         );
 
         if(button === 0) {
-            this.game.openTile(new ChunkedPosition(chunkPos, relativeTilePos, chunkSize));
+            this.game.openTile(Context.empty(), new ChunkedPosition(chunkPos, relativeTilePos, chunkSize));
         } else if(button === 2) {
-            this.game.flag(new ChunkedPosition(chunkPos, relativeTilePos, chunkSize));
+            this.game.flag(Context.empty(), new ChunkedPosition(chunkPos, relativeTilePos, chunkSize));
         }
     }
 
@@ -71,6 +71,6 @@ export class WorldDisplay {
             return this.chunkSize
         }
 
-        return this.chunkSize = await this.game.getChunkSize();
+        return this.chunkSize = await this.game.getChunkSize(Context.empty());
     }
 }

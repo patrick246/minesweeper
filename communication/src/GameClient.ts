@@ -1,4 +1,4 @@
-import {ChunkedPosition, ChunkUpdate, Game, TileContent, Vector2} from "game";
+import {ChunkedPosition, ChunkListener, ChunkUpdate, Context, Game, TileContent, Vector2} from "game";
 import * as WebSocket from "isomorphic-ws";
 import {MessageEvent} from "isomorphic-ws";
 import {
@@ -14,7 +14,6 @@ import {
     RemoveChunkListenerRequest
 } from ".";
 import {EventEmitter} from "events";
-import {ChunkListener} from "game";
 
 export class GameClient implements Game {
     private socket: WebSocket;
@@ -61,7 +60,7 @@ export class GameClient implements Game {
         });
     }
 
-    public async flag(position: ChunkedPosition): Promise<void> {
+    public async flag(_: Context, position: ChunkedPosition): Promise<void> {
         const flagRequest: FlagRequest = {
             type: "flag_request",
             position
@@ -82,7 +81,7 @@ export class GameClient implements Game {
         return this.chunkSizeCache;
     }
 
-    public async getTileContents(chunk: Vector2): Promise<TileContent[]> {
+    public async getTileContents(_: Context, chunk: Vector2): Promise<TileContent[]> {
         const tileContentMessage: GetChunkRequest = {
             type: "get_chunk_request",
             data: chunk
@@ -103,7 +102,7 @@ export class GameClient implements Game {
         });
     }
 
-    public async on(_: "update", chunk: Vector2, callback: (update: ChunkUpdate) => void): Promise<string> {
+    public async on(__: Context, _: "update", chunk: Vector2, callback: (update: ChunkUpdate) => void): Promise<string> {
         const listenerRequest: RegisterChunkListenerRequest = {
             type: "register_chunk_listener",
             chunkPosition: chunk
@@ -114,7 +113,7 @@ export class GameClient implements Game {
         return response.token;
     }
 
-    public async openTile(position: ChunkedPosition): Promise<void> {
+    public async openTile(_: Context, position: ChunkedPosition): Promise<void> {
         const openRequest: OpenRequest = {
             type: "open_request",
             position
@@ -123,7 +122,7 @@ export class GameClient implements Game {
         this.socket.send(JSON.stringify(openRequest));
     }
 
-    public async removeListener(token: string): Promise<void> {
+    public async removeListener(_: Context, token: string): Promise<void> {
         const removeListenerRequest: RemoveChunkListenerRequest = {
             type: "remove_chunk_listener",
             token

@@ -3,6 +3,7 @@ import {Vector2} from "../support";
 export type TileContent = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 'closed' | 'mine' | 'flag';
 
 export class Tile {
+    private contentCache?: number;
     constructor(
         private readonly position: Vector2,
         private readonly mine: boolean,
@@ -24,6 +25,10 @@ export class Tile {
     }
 
     public calculateNumber(neighbors: Tile[]): TileContent {
+        if(this.contentCache) {
+            return this.contentCache as TileContent;
+        }
+
         if(this.flagged) {
             return 'flag';
         }
@@ -39,6 +44,7 @@ export class Tile {
         if(num < 0 || num > 8) {
             throw new TypeError("A tile can't have more than eight neighbors");
         }
+        this.contentCache = num;
         return num as TileContent;
     }
 
@@ -58,5 +64,9 @@ export class Tile {
 
     public getPosition(): Vector2 {
         return this.position;
+    }
+
+    public hasCachedContent(): 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | undefined {
+        return this.contentCache as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | undefined;
     }
 }

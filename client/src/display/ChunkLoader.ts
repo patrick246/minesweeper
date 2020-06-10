@@ -1,4 +1,4 @@
-import {ChunkUpdate, Game, TileContent, Vector2, Vector2Key} from "game/dist";
+import {ChunkUpdate, Context, Game, TileContent, Vector2, Vector2Key} from "game/dist";
 import {LocalChunk} from "./LocalChunk";
 
 export class ChunkLoader {
@@ -51,14 +51,14 @@ export class ChunkLoader {
         if(this.inflightRequests.has(chunkPos.asMapKey())) {
             chunkContentPromise = this.inflightRequests.get(chunkPos.asMapKey())!;
         } else {
-            chunkContentPromise = this.game.getTileContents(chunkPos);
+            chunkContentPromise = this.game.getTileContents(Context.empty(), chunkPos);
             this.inflightRequests.set(chunkPos.asMapKey(), chunkContentPromise);
             shouldRegisterListener = true;
         }
 
         let chunkContents: TileContent[];
         if(shouldRegisterListener) {
-            const tokenPromise = this.game.on('update', chunkPos, update => this.chunkUpdateListener(update));
+            const tokenPromise = this.game.on(Context.empty(), 'update', chunkPos, update => this.chunkUpdateListener(update));
 
             const [token, tempContent] = await Promise.all([tokenPromise, chunkContentPromise]);
             chunkContents = tempContent;
@@ -79,7 +79,7 @@ export class ChunkLoader {
 
         if (this.chunkTokens.has(chunkKey)) {
             const token = this.chunkTokens.get(chunkKey)!;
-            await this.game.removeListener(token);
+            await this.game.removeListener(Context.empty(), token);
             this.chunkTokens.delete(chunkKey);
         }
     }
@@ -88,7 +88,7 @@ export class ChunkLoader {
         if (this.chunkSize) {
             return this.chunkSize;
         }
-        this.chunkSize = await this.game.getChunkSize();
+        this.chunkSize = await this.game.getChunkSize(Context.empty());
         return this.chunkSize;
     }
 

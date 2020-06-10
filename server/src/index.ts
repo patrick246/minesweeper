@@ -4,6 +4,8 @@ import {MongoClient} from "mongodb";
 import {MongoDbChunkPersistence} from "./persistence/MongoDbChunkPersistence";
 import {collectDefaultMetrics, register} from "prom-client";
 import * as http from "http";
+import {initTracer, PrometheusMetricsFactory} from 'jaeger-client';
+import * as promClient from 'prom-client';
 
 (async function () {
     collectDefaultMetrics();
@@ -26,12 +28,38 @@ import * as http from "http";
         await mongodbClient.connect();
 
         const metricsServer = http.createServer((_, res) => {
-           res.writeHead(200);
-           res.end(register.metrics());
+            res.writeHead(200);
+            res.end(register.metrics());
         });
         metricsServer.listen(gamePort + 1);
 
-        const gameServer = new GameServer(new CoreGame(difficulty, new MongoDbChunkPersistence(mongodbClient.db().collection('chunks'))), gamePort);
+        const tracer = initTracer({
+            serviceName: 'minesweeper-server',
+            reporter: {
+                agentHost: 'localhost',
+                agentPort: 6832
+            },
+            sampler: {
+                type: 'const',
+                param: 1
+            }
+        }, {
+            metrics: new PrometheusMetricsFactory(promClient as any, 'minesweeper_server'),
+            logger: {
+                info(msg: string) {
+                    console.log(msg);
+                },
+                error(msg: string) {
+                    console.error(msg);
+                }
+            }
+        });
+
+        const gameServer = new GameServer(
+            new CoreGame(difficulty, new MongoDbChunkPersistence(mongodbClient.db().collection('chunks')), tracer),
+            gamePort,
+            tracer
+        );
         await gameServer.run();
     } catch (err) {
         console.error(err);

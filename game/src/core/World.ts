@@ -1,4 +1,4 @@
-import {indexToPos, neighborPositionsChunked, Vector2, Vector2Key} from "../support";
+import {Context, indexToPos, neighborPositionsChunked, Vector2, Vector2Key} from "../support";
 import {Chunk} from "./Chunk";
 import {Tile, TileContent} from "./Tile";
 import {ChunkedPosition} from "./ChunkedPosition";
@@ -6,6 +6,7 @@ import {ChunkUpdate} from "./ChunkUpdate";
 import {ChunkListener} from "./ChunkListenerService";
 import {filterAsync} from "../support/arrayAsyncHelper";
 import {ChunkPersistence, PersistedChunk} from "../persistence";
+import {Tracer} from "opentracing";
 
 
 export class World {
@@ -17,23 +18,29 @@ export class World {
         private chunkSize: Vector2,
         private updateListener: ChunkListener,
         private difficulty: number,
-        private chunkPersistence: ChunkPersistence
+        private chunkPersistence: ChunkPersistence,
+        private tracer: Tracer
     ) {
         setInterval(() => this.saveWorldJob(), 5000);
     }
 
-    public async getChunkTiles(chunkPos: Vector2): Promise<TileContent[]> {
+    public async getChunkTiles(context: Context, chunkPos: Vector2): Promise<TileContent[]> {
+        const span = this.tracer.startSpan('World::getChunkTiles', {childOf: context.getSpan()});
         const chunkOrNull = await this.getChunkOrNull(chunkPos);
+        span.logEvent('chunk-fetched', {chunk: chunkPos});
         if(chunkOrNull === null) {
             const content: TileContent[] = new Array<TileContent>(this.chunkSize.area())
             return content.fill('closed');
         }
         const tiles = chunkOrNull.getActualTiles();
+        span.logEvent('chunk-tiles', {});
 
-        return Promise.all(tiles.map((tile, index) => {
+        const tileContents = await Promise.all(tiles.map((tile, index) => {
             const chunkedPosition = new ChunkedPosition(chunkPos, indexToPos(index, this.chunkSize), this.chunkSize)
             return this.getSingleTileContent(tile, chunkedPosition);
         }));
+        span.finish();
+        return tileContents;
     }
 
     public async openTile(chunkedPosition: ChunkedPosition): Promise<TileContent> {
@@ -47,21 +54,22 @@ export class World {
         if (content === 0) {
             await this.autoOpenZero(chunkedPosition);
         }
-        await this.markDirty(chunkedPosition.getChunk());
+        await this.markDirty(Context.empty(), chunkedPosition.getChunk());
         return content;
     }
 
-    public async flag(chunkedPosition: ChunkedPosition): Promise<boolean> {
+    public async flag(context: Context, chunkedPosition: ChunkedPosition): Promise<boolean> {
+
         const tile = await this.getSingleChunkTile(chunkedPosition);
         if (tile.isOpen()) {
-            await this.tryAutoFlagNeighbor(chunkedPosition);
+            await this.tryAutoFlagNeighbor(context, chunkedPosition);
             return tile.isFlagged();
         } else if (tile.isMine()) {
             tile.flag();
         } else {
             tile.open();
         }
-        await this.markDirty(chunkedPosition.getChunk());
+        await this.markDirty(context, chunkedPosition.getChunk());
         return tile.isFlagged();
     }
 
@@ -87,7 +95,7 @@ export class World {
             plannedChunkUpdates.set(position.getChunk().asMapKey(), position.getChunk());
         }
         for (let [_, chunk] of plannedChunkUpdates.entries()) {
-            await this.markDirty(chunk);
+            await this.markDirty(Context.empty(), chunk);
         }
     }
 
@@ -107,24 +115,28 @@ export class World {
                     continue;
                 }
                 neighborTile.open();
-                const neighborContent = await this.getSingleTileContent(tile, pos);
+                const neighborContent = await this.getSingleTileContent(neighborTile, pos);
                 if (neighborContent === 0) {
                     await this.autoOpenZero(pos);
                 }
                 affectedChunks.set(pos.getChunk().asMapKey(), pos.getChunk());
             }
             for (let [_, chunk] of affectedChunks.entries()) {
-                await this.markDirty(chunk);
+                await this.markDirty(Context.empty(), chunk);
             }
         }
     }
 
-    private async tryAutoFlagNeighbor(position: ChunkedPosition): Promise<void> {
+    private async tryAutoFlagNeighbor(context: Context, position: ChunkedPosition): Promise<void> {
+        const span = this.tracer.startSpan('World::tryAutoFlagNeighbor', {childOf: context.getSpan()});
         const tile = await this.getSingleChunkTile(position);
         const content = await this.getSingleTileContent(tile, position);
         const neighborPositions = neighborPositionsChunked(position);
         const neighborTiles = await Promise.all(neighborPositions
             .map(pos => this.getSingleChunkTile(pos)));
+        span.logEvent('neighborhood-tiles', {
+            positions: neighborPositions
+        });
         const unopenedOrMineOrFlaggedCount = neighborTiles
             .reduce((count, t) => count + ((!t.isOpen() || t.isMine() || t.isFlagged()) ? 1 : 0), 0);
 
@@ -135,14 +147,17 @@ export class World {
                 if (neighborTile.isOpen() || neighborTile.isFlagged()) {
                     continue;
                 }
+                span.logEvent('flag-tile', {position: neighborPositions[i]});
                 neighborTile.flag();
                 const chunk = neighborPositions[i].getChunk()
                 affectedChunks.set(chunk.asMapKey(), chunk);
             }
             for (let [_, chunk] of affectedChunks.entries()) {
-                await this.markDirty(chunk);
+                span.logEvent('chunk-mark-dirty', {chunk});
+                await this.markDirty(context.withSpan(span), chunk);
             }
         }
+        span.finish();
     }
 
     private generateChunk(chunkPos: Vector2): Chunk {
@@ -156,14 +171,10 @@ export class World {
     }
 
     private async getChunk(chunkPos: Vector2): Promise<Chunk> {
-        const chunkOrNull = await this.getChunkOrNull(chunkPos);
-        if(chunkOrNull === null) {
-            return this.generateChunk(chunkPos);
-        }
-        return chunkOrNull;
+        return (await this.getChunkOrNull(chunkPos, true))!;
     }
 
-    private async getChunkOrNull(chunkPos: Vector2): Promise<Chunk | null> {
+    private async getChunkOrNull(chunkPos: Vector2, shouldGenerate: boolean = false): Promise<Chunk | null> {
         const chunkKey = chunkPos.asMapKey();
         if (this.loadedChunks.has(chunkPos.asMapKey())) {
             return this.loadedChunks.get(chunkPos.asMapKey()) as Chunk;
@@ -186,10 +197,16 @@ export class World {
         }
 
         if (persistedChunk === null) {
+            if(shouldGenerate) {
+                const generated = this.generateChunk(chunkPos);
+                this.loadedChunks.set(chunkKey, generated);
+                return generated;
+            }
             return null;
         }
         const chunk = Chunk.load(chunkPos, this.chunkSize, persistedChunk);
         this.loadedChunks.set(chunkKey, chunk);
+
         return chunk;
     }
 
@@ -204,6 +221,10 @@ export class World {
     }
 
     private async getSingleTileContent(tile: Tile, chunkedPosition: ChunkedPosition): Promise<TileContent> {
+        if(tile.hasCachedContent() !== undefined) {
+            return tile.hasCachedContent()!;
+        }
+
         if (tile.isFlagged()) {
             return 'flag';
         }
@@ -215,15 +236,12 @@ export class World {
         if (tile.isMine()) {
             return 'mine';
         }
-
-        const num = (await this.getNeighbors(chunkedPosition))
-            .reduce((count, t) => count + (t.isMine() ? 1 : 0), 0);
-        return num as TileContent;
+        return tile.calculateNumber(await this.getNeighbors(chunkedPosition));
     }
 
-    private async markDirty(chunkPos: Vector2): Promise<void> {
+    private async markDirty(context: Context, chunkPos: Vector2): Promise<void> {
         this.dirtyChunks.set(chunkPos.asMapKey(), chunkPos);
-        this.updateListener(new ChunkUpdate(chunkPos, await this.getChunkTiles(chunkPos), this.chunkSize));
+        this.updateListener(new ChunkUpdate(chunkPos, await this.getChunkTiles(context, chunkPos), this.chunkSize));
     }
 
     private async saveWorldJob(): Promise<void> {

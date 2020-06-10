@@ -18,6 +18,9 @@ import {
 } from "game";
 import WebSocket, {MessageEvent, Server} from 'ws';
 import {Counter, exponentialBuckets, Gauge, Histogram} from "prom-client";
+import {Context} from "game/dist";
+import {Tracer} from "opentracing";
+import Span from "opentracing/lib/span";
 
 const websocketMessageProcessingHistogram = new Histogram({
     name: 'ws_request_duration_seconds',
@@ -43,8 +46,7 @@ const websocketOpenConnectionsGauge = new Gauge({
 
 export class GameServer {
     private server: Server | undefined;
-    constructor(private game: Game, private port: number) {
-        void(game);
+    constructor(private game: Game, private port: number, private tracer: Tracer) {
     }
 
     public async run(): Promise<void> {
@@ -59,7 +61,7 @@ export class GameServer {
             socket.onmessage = event => this.handleMessage(event, socket, listenerSet);
             socket.onclose = async () => {
                 await Promise.all([...listenerSet].map(async (token) => {
-                    await this.game.removeListener(token);
+                    await this.game.removeListener(Context.empty(), token);
                 }));
                 chunkUpdateListenerGauge.dec(listenerSet.size);
                 websocketOpenConnectionsGauge.dec();
@@ -70,9 +72,18 @@ export class GameServer {
     }
 
     private async handleMessage(message: MessageEvent, socket: WebSocket, listeners: Set<string>): Promise<void> {
+        const messageSpan = this.tracer.startSpan('websocket_message', {
+            tags: {
+                component: 'world_server',
+            }
+        });
         const requestTimer = websocketMessageProcessingHistogram.startTimer();
         const request = GameServer.readMessage(message);
         console.log(request);
+        messageSpan.logEvent('message_decoded', {type: request.type});
+        messageSpan.addTags({
+            method: request.type
+        });
 
         let response: Message | undefined;
 
@@ -84,7 +95,7 @@ export class GameServer {
                 await this.handleOpenRequest(request);
                 break;
             case "flag_request":
-                await this.handleFlagRequest(request);
+                await this.handleFlagRequest(request, messageSpan);
                 break;
             case "register_chunk_listener":
                 response = await this.handleRegisterChunkListener(request, socket, listeners);
@@ -99,9 +110,12 @@ export class GameServer {
                 console.log('[GameServer] Did not handle message of type', request.type);
         }
         if(response) {
+            messageSpan.logEvent('response_sending', {type: response.type});
             socket.send(JSON.stringify(response));
+            messageSpan.logEvent('response_sent', {type: response.type});
         }
         requestTimer({type: request.type});
+        messageSpan.finish();
     }
 
     private static readMessage(event: MessageEvent): Message {
@@ -126,7 +140,7 @@ export class GameServer {
             console.log('[GameServer][GetChunkRequest] Received message without data');
             throw new Error("Received message without data");
         }
-        const chunkContent = await this.game.getTileContents(Vector2.copy(message.data));
+        const chunkContent = await this.game.getTileContents(Context.empty(), Vector2.copy(message.data));
         return {
             type: "get_chunk_response",
             data: {
@@ -143,7 +157,7 @@ export class GameServer {
                     }
                     return elem;
                 }),
-                size: await this.game.getChunkSize()
+                size: await this.game.getChunkSize(Context.empty())
             }
         };
     }
@@ -153,15 +167,15 @@ export class GameServer {
             console.log('[GameServer][OpenRequest] Received message without position');
             return;
         }
-        await this.game.openTile(ChunkedPosition.copy(message.position));
+        await this.game.openTile(Context.empty(), ChunkedPosition.copy(message.position));
     }
 
-    private async handleFlagRequest(message: FlagRequest): Promise<void> {
+    private async handleFlagRequest(message: FlagRequest, span: Span): Promise<void> {
         if(!message.position) {
             console.log('[GameServer][FlagRequest] Received message without position');
             return;
         }
-        await this.game.flag(ChunkedPosition.copy(message.position));
+        await this.game.flag(Context.empty().withSpan(span), ChunkedPosition.copy(message.position));
     }
 
     private async handleRegisterChunkListener(message: RegisterChunkListenerRequest, socket: WebSocket, listeners: Set<string>): Promise<RegisterChunkListenerResponse> {
@@ -169,7 +183,7 @@ export class GameServer {
             console.log('[GameServer][RegChunkListener] Received chunk listener request without chunk', message);
             throw new Error("Chunk Listener request without chunk");
         }
-        const token = await this.game.on('update', Vector2.copy(message.chunkPosition), (update: ChunkUpdate) => {
+        const token = await this.game.on(Context.empty(), 'update', Vector2.copy(message.chunkPosition), (update: ChunkUpdate) => {
             socket.send(JSON.stringify({
                 type: 'chunk_update',
                 data: {
@@ -195,7 +209,7 @@ export class GameServer {
             console.log('[GameServer][RegChunkListener] Received remove chunk listener request without token', message);
             return;
         }
-        await this.game.removeListener(message.token);
+        await this.game.removeListener(Context.empty(), message.token);
         listeners.delete(message.token);
         chunkUpdateListenerGauge.dec();
     }
@@ -203,7 +217,7 @@ export class GameServer {
     private async handleChunkSizeRequest(): Promise<ChunkSizeResponse> {
         return {
             type: "chunk_size_response",
-            size: await this.game.getChunkSize()
+            size: await this.game.getChunkSize(Context.empty())
         };
     }
 }

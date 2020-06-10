@@ -1,5 +1,5 @@
 import {ChunkedPosition, ChunkUpdate, Game, TileContent} from '../core';
-import {indexToPos, posToIndex, Vector2} from "../support";
+import {Context, indexToPos, posToIndex, Vector2} from "../support";
 import * as readline from "readline";
 
 class Command {
@@ -22,25 +22,25 @@ export class CmdPlayer {
 
     public async run(): Promise<void> {
         //this.clearDisplay();
-        this.chunkSize = await this.game.getChunkSize();
-        await this.displayField(await this.game.getTileContents(new Vector2(0, 0)), this.chunkSize);
-        this.listenerToken = await this.game.on('update', new Vector2(0, 0), update => {
+        this.chunkSize = await this.game.getChunkSize(Context.empty());
+        await this.displayField(await this.game.getTileContents(Context.empty(), new Vector2(0, 0)), this.chunkSize);
+        this.listenerToken = await this.game.on(Context.empty(), 'update', new Vector2(0, 0), update => {
             this.processUpdate(update);
         });
         while (true) {
             const command = await this.prompt();
             switch (command.action) {
                 case "flag":
-                    await this.game.flag(new ChunkedPosition(this.currentChunk, command.data, this.chunkSize));
+                    await this.game.flag(Context.empty(), new ChunkedPosition(this.currentChunk, command.data, this.chunkSize));
                     break;
                 case "open":
-                    await this.game.openTile(new ChunkedPosition(this.currentChunk, command.data, this.chunkSize));
+                    await this.game.openTile(Context.empty(), new ChunkedPosition(this.currentChunk, command.data, this.chunkSize));
                     break;
                 case "changeChunk":
                     this.currentChunk = command.data;
-                    await this.game.removeListener(this.listenerToken);
-                    await this.displayField(await this.game.getTileContents(this.currentChunk), this.chunkSize);
-                    this.listenerToken = await this.game.on('update', this.currentChunk, update => this.processUpdate(update));
+                    await this.game.removeListener(Context.empty(), this.listenerToken);
+                    await this.displayField(await this.game.getTileContents(Context.empty(), this.currentChunk), this.chunkSize);
+                    this.listenerToken = await this.game.on(Context.empty(), 'update', this.currentChunk, update => this.processUpdate(update));
                     break;
             }
         }
