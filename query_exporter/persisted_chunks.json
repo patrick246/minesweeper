@@ -1,0 +1,31 @@
+{
+	"type": "gauge",
+	"name": "minesweeper_db_persisted_chunks",
+	"help": "The amount of chunks that were persisted into the database",
+	"labels": [],
+	"database": "minesweeper",
+	"collection": "chunks",
+	"pipeline": [
+		{
+			"$group": {
+				"_id": null,
+				"value": {
+					"$sum": 1
+				}
+			}
+		},
+		{
+			"$addFields": {
+				"labels": {
+					"placeholder": "hello world"
+				}
+			}
+		},
+		{
+			"$project": {
+				"_id": 0,
+				"labels.placeholder": 0
+			}
+		}
+	]
+}

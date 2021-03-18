@@ -84,27 +84,28 @@ export class GameServer {
         messageSpan.addTags({
             method: request.type
         });
+        messageSpan.setOperationName(request.type);
 
         let response: Message | undefined;
 
         switch (request.type) {
             case 'get_chunk_request':
-                response = await this.handleGetChunkRequest(request);
+                response = await this.handleGetChunkRequest(request, messageSpan);
                 break;
             case "open_request":
-                await this.handleOpenRequest(request);
+                await this.handleOpenRequest(request, messageSpan);
                 break;
             case "flag_request":
                 await this.handleFlagRequest(request, messageSpan);
                 break;
             case "register_chunk_listener":
-                response = await this.handleRegisterChunkListener(request, socket, listeners);
+                response = await this.handleRegisterChunkListener(request, socket, listeners, messageSpan);
                 break;
             case "remove_chunk_listener":
-                await this.handleRemoveChunkListener(request, listeners);
+                await this.handleRemoveChunkListener(request, listeners, messageSpan);
                 break;
             case "chunk_size_request":
-                response = await this.handleChunkSizeRequest();
+                response = await this.handleChunkSizeRequest(messageSpan);
                 break;
             default:
                 console.log('[GameServer] Did not handle message of type', request.type);
@@ -135,12 +136,12 @@ export class GameServer {
         return message;
     }
 
-    private async handleGetChunkRequest(message: GetChunkRequest): Promise<GetChunkResponse> {
+    private async handleGetChunkRequest(message: GetChunkRequest, span: Span): Promise<GetChunkResponse> {
         if(!message.data) {
             console.log('[GameServer][GetChunkRequest] Received message without data');
             throw new Error("Received message without data");
         }
-        const chunkContent = await this.game.getTileContents(Context.empty(), Vector2.copy(message.data));
+        const chunkContent = await this.game.getTileContents(Context.empty().withSpan(span), Vector2.copy(message.data));
         return {
             type: "get_chunk_response",
             data: {
@@ -162,12 +163,12 @@ export class GameServer {
         };
     }
 
-    private async handleOpenRequest(message: OpenRequest): Promise<void> {
+    private async handleOpenRequest(message: OpenRequest, span: Span): Promise<void> {
         if(!message.position) {
             console.log('[GameServer][OpenRequest] Received message without position');
             return;
         }
-        await this.game.openTile(Context.empty(), ChunkedPosition.copy(message.position));
+        await this.game.openTile(Context.empty().withSpan(span), ChunkedPosition.copy(message.position));
     }
 
     private async handleFlagRequest(message: FlagRequest, span: Span): Promise<void> {
@@ -178,12 +179,12 @@ export class GameServer {
         await this.game.flag(Context.empty().withSpan(span), ChunkedPosition.copy(message.position));
     }
 
-    private async handleRegisterChunkListener(message: RegisterChunkListenerRequest, socket: WebSocket, listeners: Set<string>): Promise<RegisterChunkListenerResponse> {
+    private async handleRegisterChunkListener(message: RegisterChunkListenerRequest, socket: WebSocket, listeners: Set<string>, span: Span): Promise<RegisterChunkListenerResponse> {
         if(!message.chunkPosition) {
             console.log('[GameServer][RegChunkListener] Received chunk listener request without chunk', message);
             throw new Error("Chunk Listener request without chunk");
         }
-        const token = await this.game.on(Context.empty(), 'update', Vector2.copy(message.chunkPosition), (update: ChunkUpdate) => {
+        const token = await this.game.on(Context.empty().withSpan(span), 'update', Vector2.copy(message.chunkPosition), (update: ChunkUpdate) => {
             socket.send(JSON.stringify({
                 type: 'chunk_update',
                 data: {
@@ -204,20 +205,20 @@ export class GameServer {
         };
     }
 
-    private async handleRemoveChunkListener(message: RemoveChunkListenerRequest, listeners: Set<string>): Promise<void> {
+    private async handleRemoveChunkListener(message: RemoveChunkListenerRequest, listeners: Set<string>, span: Span): Promise<void> {
         if(!message.token) {
             console.log('[GameServer][RegChunkListener] Received remove chunk listener request without token', message);
             return;
         }
-        await this.game.removeListener(Context.empty(), message.token);
+        await this.game.removeListener(Context.empty().withSpan(span), message.token);
         listeners.delete(message.token);
         chunkUpdateListenerGauge.dec();
     }
 
-    private async handleChunkSizeRequest(): Promise<ChunkSizeResponse> {
+    private async handleChunkSizeRequest(span: Span): Promise<ChunkSizeResponse> {
         return {
             type: "chunk_size_response",
-            size: await this.game.getChunkSize(Context.empty())
+            size: await this.game.getChunkSize(Context.empty().withSpan(span))
         };
     }
 }

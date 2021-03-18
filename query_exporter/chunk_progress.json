@@ -1,0 +1,172 @@
+{
+	"type": "gauge",
+	"name": "minesweeper_db_chunk_progress",
+	"help": "The amount of chunks that have a certian percentage finished",
+	"labels": [
+		"q"
+	],
+	"database": "minesweeper",
+	"collection": "chunks",
+	"pipeline": [
+		{
+			"$unwind": {
+				"path": "$tiles"
+			}
+		},
+		{
+			"$project": {
+				"_id": 1,
+				"mine": {
+					"$toInt": "$tiles.mine"
+				},
+				"flag": {
+					"$toInt": {
+						"$toBool": {
+							"$ifNull": [
+								"$tiles.flaggedBy",
+								0
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"$group": {
+				"_id": "$_id",
+				"mines": {
+					"$sum": "$mine"
+				},
+				"flags": {
+					"$sum": "$flag"
+				}
+			}
+		},
+		{
+			"$group": {
+				"_id": null,
+				"100": {
+					"$sum": {
+						"$toInt": {
+							"$gte": [
+								{
+									"$divide": [
+										"$flags",
+										"$mines"
+									]
+								},
+								1
+							]
+						}
+					}
+				},
+				"0": {
+					"$sum": 1
+				},
+				"10": {
+					"$sum": {
+						"$toInt": {
+							"$gte": [
+								{
+									"$divide": [
+										"$flags",
+										"$mines"
+									]
+								},
+								0.1
+							]
+						}
+					}
+				},
+				"25": {
+					"$sum": {
+						"$toInt": {
+							"$gte": [
+								{
+									"$divide": [
+										"$flags",
+										"$mines"
+									]
+								},
+								0.25
+							]
+						}
+					}
+				},
+				"50": {
+					"$sum": {
+						"$toInt": {
+							"$gte": [
+								{
+									"$divide": [
+										"$flags",
+										"$mines"
+									]
+								},
+								0.5
+							]
+						}
+					}
+				},
+				"75": {
+					"$sum": {
+						"$toInt": {
+							"$gte": [
+								{
+									"$divide": [
+										"$flags",
+										"$mines"
+									]
+								},
+								0.75
+							]
+						}
+					}
+				},
+				"90": {
+					"$sum": {
+						"$toInt": {
+							"$gte": [
+								{
+									"$divide": [
+										"$flags",
+										"$mines"
+									]
+								},
+								0.9
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"$project": {
+				"_id": 0,
+				"quantiles": {
+					"$objectToArray": "$$ROOT"
+				}
+			}
+		},
+		{
+			"$unwind": {
+				"path": "$quantiles"
+			}
+		},
+		{
+			"$match": {
+				"quantiles.k": {
+					"$ne": "_id"
+				}
+			}
+		},
+		{
+			"$project": {
+				"labels": {
+					"q": "$quantiles.k"
+				},
+				"value": "$quantiles.v"
+			}
+		}
+	]
+}

@@ -7,6 +7,7 @@ import {World} from "./World";
 import {ChunkListener, ChunkListenerService} from "./ChunkListenerService";
 import {ChunkPersistence} from "../persistence";
 import {Tracer} from "opentracing";
+import {traced} from "../support/tracingHelper";
 
 export class CoreGame implements Game {
     private readonly world: World;
@@ -24,31 +25,35 @@ export class CoreGame implements Game {
         );
     }
 
+    @traced()
     public async on(__: Context, _: 'update', chunk: Vector2, callback: (update: ChunkUpdate) => void): Promise<string> {
         return await this.chunkListenerService.registerListener(chunk, callback);
     }
 
+    @traced()
     public async removeListener(__: Context, token: string): Promise<void> {
         this.chunkListenerService.unregisterListener(token);
     }
 
+    @traced()
     public async getTileContents(context: Context, chunk: Vector2): Promise<TileContent[]> {
         return await this.world.getChunkTiles(context, chunk);
     }
 
+    @traced()
     public async getChunkSize(__: Context): Promise<Vector2> {
         return this.chunkSize;
     }
 
-    public async openTile(__: Context, position: ChunkedPosition): Promise<void> {
+    @traced()
+    public async openTile(context: Context, position: ChunkedPosition): Promise<void> {
         console.log('opening tile', position);
-        await this.world.openTile(position);
+        await this.world.openTile(context, position);
     }
 
+    @traced()
     public async flag(context: Context, position: ChunkedPosition): Promise<void> {
-        const span = this.tracer.startSpan('CoreGame::flag', {childOf: context.getSpan()})
-        await this.world.flag(context.withSpan(span), position);
-        span.finish();
+        await this.world.flag(context, position);
     }
 
     private onChunkUpdate(update: ChunkUpdate) {
@@ -57,5 +62,9 @@ export class CoreGame implements Game {
         if(listeners !== undefined) {
             listeners.forEach(cb => cb(update));
         }
+    }
+
+    public getTracer(): Tracer {
+        return this.tracer;
     }
 }
