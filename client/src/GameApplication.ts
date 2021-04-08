@@ -3,11 +3,16 @@ import {GameClient} from "communication";
 import {WorldDisplay} from "./display/WorldDisplay";
 import {MouseDragListener} from "./display/MouseDragListener";
 import {Vector2} from "game";
+import {v4} from "uuid";
+import {TopList} from "./display/TopList";
+import {ClosedNotification} from "./display/ClosedNotification";
 
 export class GameApplication {
     private app: PIXI.Application;
     private client: GameClient;
     private world: WorldDisplay | undefined;
+    private topList: TopList | undefined;
+    private offlineNotification: ClosedNotification | undefined;
     private mouseListener: MouseDragListener;
 
     constructor() {
@@ -25,16 +30,25 @@ export class GameApplication {
 
         this.mouseListener = new MouseDragListener(this.app.view);
         document.body.appendChild(this.app.view);
-
     }
 
     public async run(): Promise<void> {
         await this.client.waitForConnection();
+        const loginResponse = await this.client.logIn(this.getSecret());
         await this.loadResources();
         console.log('Connected!');
 
-        this.world = new WorldDisplay(this.client);
+        this.world = new WorldDisplay(this.client, loginResponse.username);
         this.app.stage.addChild(this.world.getContainer());
+
+        this.topList = new TopList(this.client);
+        this.app.stage.addChild(this.topList.getContainer());
+
+        this.offlineNotification = new ClosedNotification(this.client);
+        this.app.stage.addChild(this.offlineNotification.getContainer());
+
+        setInterval(() => this.offlineNotification!.checkConnection(), 1000);
+
         this.mouseListener.on('drag', offset => setImmediate(() => this.world!.onPlayerLocationUpdate(offset)));
         this.mouseListener.on('click', (position, buttons) => this.world!.onPlayerClick(position, buttons));
 
@@ -80,6 +94,15 @@ export class GameApplication {
         const url = prompt('Game Server URL', lastUrl || "ws://localhost:3000") || 'ws://localhost:3000';
         this.setSavedGameUrl(url);
         return url;
+    }
+
+    private getSecret(): string {
+        let key = localStorage.getItem('minesweeper_secret');
+        if (!key) {
+            key = v4();
+            localStorage.setItem('minesweeper_secret', key);
+        }
+        return key;
     }
 
     private getSavedGameUrl(): string | undefined {

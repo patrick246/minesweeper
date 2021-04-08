@@ -1,28 +1,29 @@
-import {User} from "./User";
-import {v4} from 'uuid';
+import {User} from "game/dist/user/User";
 import {NameGenerator} from "./NameGenerator";
+import {Collection} from "mongodb";
+import {v4} from "uuid";
 
 export class UserService {
-    private users: Map<string, User> = new Map<string, User>();
-
-    constructor(private nameGenerator: NameGenerator) {
+    constructor(private nameGenerator: NameGenerator, private userDb: Collection) {
     }
 
-    public async getUserById(id: string): Promise<User | null> {
-        if (this.users.has(id)) {
-            return this.users.get(id)!;
+    public async getUser(secret: string): Promise<User> {
+        const id = v4();
+        const name = this.nameGenerator.getNextName();
+
+        const result = await this.userDb.findOneAndUpdate({ secret: secret }, {
+            $setOnInsert: {
+                _id: id,
+                username: name,
+            }
+        }, {
+            upsert: true
+        });
+
+        if (!result.value) {
+            return new User(id, name);
         }
-        return null;
-    }
 
-    public async createUser(): Promise<User> {
-        const user = new User(v4(), await this.nameGenerator.getNextName());
-        this.users.set(user.getId(), user);
-        return user;
-    }
-
-    public async getUserFromToken(token: string): Promise<User> {
-        void(token);
-        throw new Error("Not implemented: get user from oidc access token");
+        return new User(result.value._id, result.value.username);
     }
 }

@@ -1,38 +1,28 @@
 import {ChunkUpdate, Context, Game, TileContent, Vector2, Vector2Key} from "game/dist";
 import {LocalChunk} from "./LocalChunk";
+import {VisibleChunkCalculator} from "./VisibleChunkCalculator";
 
 export class ChunkLoader {
     private chunks: Map<Vector2Key, LocalChunk> = new Map<Vector2Key, LocalChunk>();
     private chunkTokens: Map<Vector2Key, string> = new Map<Vector2Key, string>();
     private chunkSize?: Vector2;
-    private tileSize: number = 32;
     private inflightRequests: Map<Vector2Key, Promise<TileContent[]>> = new Map<Vector2Key, Promise<TileContent[]>>();
+    private visibleChunkCalculator: VisibleChunkCalculator = new VisibleChunkCalculator();
 
-    constructor(private game: Game) {
+    constructor(private game: Game, private tileSize: number) {
     }
 
     public async getChunksInViewport(position: Vector2, viewport: Vector2): Promise<LocalChunk[]> {
         const chunkSize = await this.getChunkSize();
-        console.log('calculating based on position', position);
-
-        const visibleChunkCount = viewport.elementDivide(chunkSize.scalarMultiplicate(this.tileSize)).floor().add(new Vector2(3, 3));
-
-        const startingChunk = position.elementDivide(chunkSize.scalarMultiplicate(this.tileSize)).floor().subtract(new Vector2(1, 1));
-        const visibleChunkPositions: Vector2[] = [];
-
-        visibleChunkCount.iterate2d((_, __, vec) => {
-            visibleChunkPositions.push(startingChunk.add(vec));
-        });
+        const visibleChunkPositions = this.visibleChunkCalculator.getVisibleChunks(position, viewport, chunkSize, this.tileSize);
 
         const visibleChunks: LocalChunk[] = await Promise.all(visibleChunkPositions.map(chunk => this.getChunk(chunk)));
-        console.log('currently visible chunks', visibleChunks);
 
-        console.log('listener stats', this.chunkTokens.size);
-
-        if (this.chunks.size > 24) {
+        if (this.chunks.size > 8) {
             const visibleChunkKeys = visibleChunkPositions.map(pos => pos.asMapKey());
             for (let [key] of this.chunks.entries()) {
                 if (!visibleChunkKeys.includes(key)) {
+                    console.log('unloading chunk', key);
                     await this.unloadChunk(key);
                 }
             }
@@ -93,7 +83,6 @@ export class ChunkLoader {
     }
 
     private async chunkUpdateListener(chunkUpdate: ChunkUpdate): Promise<void> {
-        console.log('Chunk update', chunkUpdate);
         const key = chunkUpdate.chunk.asMapKey();
         if (this.chunks.has(key)) {
             const localChunk = this.chunks.get(key)!;

@@ -17,6 +17,6 @@
     "typescript": "^3.9.3"
   },
   "dependencies": {
-    "opentracing": "^0.14.4"
+    "opentracing": "^0.14.5"
   }
 }

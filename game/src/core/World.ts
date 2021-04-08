@@ -8,6 +8,7 @@ import {filterAsync} from "../support/arrayAsyncHelper";
 import {ChunkPersistence, PersistedChunk} from "../persistence";
 import {Tracer} from "opentracing";
 import {traced} from "../support/tracingHelper";
+import {TrackFunction} from "../user/PointTracker";
 
 
 export class World {
@@ -44,20 +45,25 @@ export class World {
     }
 
     @traced()
-    public async openTile(context: Context, chunkedPosition: ChunkedPosition): Promise<TileContent> {
+    public async openTile(context: Context, chunkedPosition: ChunkedPosition): Promise<number> {
         void(context);
         const tile = await this.getSingleChunkTile(context, chunkedPosition);
         if (tile.isOpen()) {
             await this.tryAutoOpenNeighbor(context, chunkedPosition);
         } else {
             tile.open();
+            if (tile.isMine()) {
+                this.track(context, -20);
+            } else {
+                this.track(context, 1);
+            }
         }
         const content = await this.getSingleTileContent(context, tile, chunkedPosition);
         if (content === 0) {
             await this.autoOpenZero(context, chunkedPosition);
         }
         await this.markDirty(context, chunkedPosition.getChunk());
-        return content;
+        return 0;
     }
 
     @traced()
@@ -68,8 +74,10 @@ export class World {
             return tile.isFlagged();
         } else if (tile.isMine()) {
             tile.flag();
+            this.track(context, 1);
         } else {
             tile.open();
+            this.track(context, -20);
             const content = await this.getSingleTileContent(context, tile, chunkedPosition);
             if(content === 0) {
                 await this.autoOpenZero(context, chunkedPosition);
@@ -93,7 +101,10 @@ export class World {
                 continue;
             }
             const tile = await this.getSingleChunkTile(context, position);
-            tile.open()
+            if (!tile.isOpen()) {
+                tile.open();
+                this.track(context, 1);
+            }
             const result = await this.getSingleTileContent(context, tile, position);
             if (result === 0) {
                 positions.push(
@@ -130,6 +141,7 @@ export class World {
                     continue;
                 }
                 neighborTile.open();
+                this.track(context, 1)
                 const neighborContent = await this.getSingleTileContent(context, neighborTile, pos);
                 if (neighborContent === 0) {
                     span && span.logEvent('open-zero-neighbor', {});
@@ -169,6 +181,7 @@ export class World {
                 }
 
                 neighborTile.flag();
+                this.track(context, 1);
                 const chunk = neighborPositions[i].getChunk()
                 affectedChunks.set(chunk.asMapKey(), chunk);
             }
@@ -277,6 +290,13 @@ export class World {
 
         console.log('[World] World save successful, saved ', this.dirtyChunks.size, 'dirty chunks');
         this.dirtyChunks.clear();
+    }
+
+    private track(ctx: Context, points: number) {
+        const fn = ctx.getData<TrackFunction>('track');
+        if (fn) {
+            fn(points);
+        }
     }
 
     public getTracer(): Tracer {

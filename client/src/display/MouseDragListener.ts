@@ -32,7 +32,6 @@ export class MouseDragListener {
                 this.dragOffsetSinceLastUpdate = this.dragOffsetSinceLastUpdate.add(this.dragStartPosition.subtract(newPos));
 
                 if(Math.abs(this.dragOffsetSinceLastUpdate.x) > 8 || Math.abs(this.dragOffsetSinceLastUpdate.y) > 8) {
-                    console.log('current drag offset', this.dragOffsetSinceLastUpdate);
                     this.isDrag = true;
                     this.dragListeners.forEach(cb => cb(this.dragOffsetSinceLastUpdate, event.buttons));
                     this.dragStartPosition = newPos;
@@ -41,7 +40,6 @@ export class MouseDragListener {
             }
         });
         element.addEventListener('mouseup', (event: MouseEvent) => {
-            console.log(event);
             if(!this.isDrag) {
                 this.clickListeners.forEach(cb => cb(new Vector2(event.x, event.y), event.button));
             }

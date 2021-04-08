@@ -15,6 +15,12 @@ export class Context {
         return this.data.get(key)! as T;
     }
 
+    public withData<T>(key: string, value: T): Context {
+        const newMap = new Map<string, unknown>(this.data);
+        newMap.set(key, value);
+        return new Context(newMap, this.span);
+    }
+
     public withSpan(span: Span): Context {
         return new Context(new Map<string, unknown>(this.data), span);
     }

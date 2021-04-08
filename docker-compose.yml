@@ -1,12 +1,20 @@
 version: '3'
 services:
   client:
-    image: repo.p246.dev/patrick246/minesweeper-client:1.0.9
+    image: repo.p246.dev/patrick246/minesweeper-client:1.1.2
     build:
       context: .
       dockerfile: client/Dockerfile
+    ports:
+    - 8080:80
   server:
-    image: repo.p246.dev/patrick246/minesweeper-server:1.0.9
+    image: repo.p246.dev/patrick246/minesweeper-server:1.1.2
     build:
       context: .
       dockerfile: server/Dockerfile
+    environment:
+      GAME_DB_URI: mongodb://db:27017/minesweeper
+    ports:
+    - 3000:3000
+  db:
+    image: mongo:4.4

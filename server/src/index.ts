@@ -6,6 +6,9 @@ import {collectDefaultMetrics, register} from "prom-client";
 import * as http from "http";
 import {initTracer, PrometheusMetricsFactory} from 'jaeger-client';
 import * as promClient from 'prom-client';
+import {PointTracker} from "game/dist/user/PointTracker";
+import {UserService} from "./usermanagement/UserService";
+import {NameGenerator} from "./usermanagement/NameGenerator";
 
 (async function () {
     collectDefaultMetrics();
@@ -55,11 +58,13 @@ import * as promClient from 'prom-client';
             }
         });
 
-        const gameServer = new GameServer(
-            new CoreGame(difficulty, new MongoDbChunkPersistence(mongodbClient.db().collection('chunks')), tracer),
-            gamePort,
-            tracer
-        );
+        const pointTracker = new PointTracker();
+        setInterval(() => pointTracker.cleanUp(), 5 * 60 * 1000);
+
+        const userService = new UserService(new NameGenerator(), mongodbClient.db().collection('users'));
+        const chunkPersistence = new MongoDbChunkPersistence(mongodbClient.db().collection('chunks'));
+        const game = new CoreGame(difficulty, chunkPersistence, tracer, pointTracker);
+        const gameServer = new GameServer(game, gamePort, tracer, pointTracker, userService);
         await gameServer.run();
     } catch (err) {
         console.error(err);

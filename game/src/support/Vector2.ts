@@ -72,7 +72,15 @@ export class Vector2 {
         return new Vector2(this.x / vec.x, this.y / vec.y);
     }
 
+    public elementMultiplicate(vec: Vector2): Vector2 {
+        return new Vector2(this.x * vec.x, this.y * vec.y);
+    }
+
     public floor(): Vector2 {
         return new Vector2(Math.floor(this.x), Math.floor(this.y));
+    }
+
+    public ceil(): Vector2 {
+        return new Vector2(Math.ceil(this.x), Math.ceil(this.y));
     }
 }

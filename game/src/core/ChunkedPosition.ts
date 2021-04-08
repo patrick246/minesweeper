@@ -20,6 +20,10 @@ export class ChunkedPosition {
         return this.position;
     }
 
+    public getChunkSize(): Vector2 {
+        return this.chunkSize;
+    }
+
     public add(vec: Vector2): ChunkedPosition {
         const resultPos = this.position.add(vec);
         let resultPosX = resultPos.x;

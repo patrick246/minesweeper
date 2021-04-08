@@ -28,7 +28,7 @@ const NOUNS = [
 
 export class NameGenerator {
 
-    public async getNextName(): Promise<string> {
-        return ADJECTIVES[ADJECTIVES.length * Math.random()] + "_" + NOUNS[NOUNS.length * Math.random()];
+    public getNextName(): string {
+        return ADJECTIVES[Math.floor(ADJECTIVES.length * Math.random())] + " " + NOUNS[Math.floor(NOUNS.length * Math.random())];
     }
 }

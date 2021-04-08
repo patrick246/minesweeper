@@ -2,17 +2,27 @@ import * as PIXI from 'pixi.js';
 import {Game, Vector2} from "game";
 import {ChunkLoader} from "./ChunkLoader";
 import {ChunkedPosition, Context} from "game/dist";
+import {UserClicks} from "./UserClicks";
 
 export class WorldDisplay {
+    private readonly ticker: PIXI.Ticker = new PIXI.Ticker();
     private readonly container: PIXI.Container = new PIXI.Container();
+    private readonly chunkContainer: PIXI.Container = new PIXI.Container();
     private readonly chunkLoader: ChunkLoader;
+    private readonly userClicks: UserClicks;
     private location: Vector2 = new Vector2(0, 0);
     private tileSize: number = 32;
     private chunkSize?: Vector2;
     private offsetSinceLastRecalculation = new Vector2(0, 0);
 
-    constructor(private game: Game) {
-        this.chunkLoader = new ChunkLoader(this.game);
+    constructor(private game: Game, myUsername: string) {
+        this.chunkLoader = new ChunkLoader(this.game, this.tileSize);
+        this.userClicks = new UserClicks(this.game, this.tileSize, myUsername);
+        this.container.addChild(this.chunkContainer);
+        this.container.addChild(this.userClicks.getContainer());
+
+        this.ticker.add((dt: number) => this.userClicks.updateClickMarkers(dt));
+        this.ticker.start();
     }
 
     public getContainer(): PIXI.Container {
@@ -25,19 +35,21 @@ export class WorldDisplay {
         this.container.y = -this.location.y;
         this.offsetSinceLastRecalculation = this.offsetSinceLastRecalculation.add(offset);
 
-        console.log('offset since last view calc', this.offsetSinceLastRecalculation);
+        const viewport = new Vector2(window.innerWidth, window.innerHeight);
+        await this.userClicks.adjustViewport(this.location, viewport);
 
-        const chunkSize = await this.getChunkSize();
-        if(force || Math.abs(this.offsetSinceLastRecalculation.x) > (chunkSize.x / 2) * this.tileSize ||
-            Math.abs(this.offsetSinceLastRecalculation.y) > (chunkSize.y / 2) * this.tileSize
-        ) {
+        if (force || Math.abs(this.offsetSinceLastRecalculation.x) > this.tileSize || Math.abs(this.offsetSinceLastRecalculation.y) > this.tileSize) {
             history.replaceState({location: this.location}, '', `#${this.location.x},${this.location.y}`);
             this.offsetSinceLastRecalculation = new Vector2(0, 0);
-            const visibleChunks = await this.chunkLoader.getChunksInViewport(this.location, new Vector2(window.innerWidth, window.innerHeight));
-            for(let chunk of visibleChunks) {
-                this.container.addChild(chunk.getContainer());
-            }
         }
+
+        const visibleChunks = await this.chunkLoader.getChunksInViewport(this.location, viewport);
+
+        this.chunkContainer.removeChildren();
+        for (let chunk of visibleChunks) {
+            this.chunkContainer.addChild(chunk.getContainer());
+        }
+
     }
 
     public async onPlayerClick(screenPosition: Vector2, button: number) {
@@ -50,24 +62,24 @@ export class WorldDisplay {
             ((absoluteTilePosition.y % chunkSize.y) + chunkSize.y) % chunkSize.y,
         );
 
-        console.log(
+        /*console.log(
             'buttons', button,
             'screen pos', screenPosition,
             'world pos', worldPosition,
             'absolute tile pos', absoluteTilePosition,
             'chunk pos', chunkPos,
             'relative tile pos', relativeTilePos
-        );
+        );*/
 
-        if(button === 0) {
+        if (button === 0) {
             this.game.openTile(Context.empty(), new ChunkedPosition(chunkPos, relativeTilePos, chunkSize));
-        } else if(button === 2) {
+        } else if (button === 2) {
             this.game.flag(Context.empty(), new ChunkedPosition(chunkPos, relativeTilePos, chunkSize));
         }
     }
 
     private async getChunkSize(): Promise<Vector2> {
-        if(this.chunkSize) {
+        if (this.chunkSize) {
             return this.chunkSize
         }
 
